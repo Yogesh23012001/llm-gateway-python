@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gateway.providers.base import CompletionRequest, CompletionResponse, LLMProvider
+from gateway.providers.base import CompletionRequest, CompletionResult, LLMProvider
 
 
 class ModelRouter:
@@ -19,6 +19,6 @@ class ModelRouter:
     def resolve(self, model: str) -> LLMProvider:
         raise NotImplementedError("Model resolution is implemented in Hour 3.")
 
-    async def complete(self, request: CompletionRequest) -> CompletionResponse:
+    async def complete(self, request: CompletionRequest) -> CompletionResult:
         provider = self.resolve(request.model)
         return await provider.complete(request)
