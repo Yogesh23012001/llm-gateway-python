@@ -13,18 +13,31 @@ from gateway.observability.logging import configure_logging
 
 logger = structlog.get_logger(__name__)
 
+from gateway.providers.anthropic import AnthropicProvider
+from gateway.providers.gemini import GeminiProvider
+from gateway.router.router import LLMRouter
+from gateway.api.routes import router as chat_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level)
-    logger.info("gateway_starting", default_model=settings.default_model)
-    # Providers, DB pool, router wired in Hours 2-4
+
+    providers = []
+    if settings.anthropic_api_key:
+        providers.append(AnthropicProvider(settings.anthropic_api_key, timeout=settings.request_timeout_seconds))
+    if settings.gemini_api_key:
+        providers.append(GeminiProvider(settings.gemini_api_key))
+
+    app.state.router = LLMRouter(providers)
+    logger.info("gateway_starting", providers=[p.name for p in providers])
     yield
     logger.info("gateway_stopping")
 
 
 app = FastAPI(title="LLM Gateway", version="0.1.0", lifespan=lifespan)
+app.include_router(chat_router)
 
 
 @app.get("/health")

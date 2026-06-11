@@ -19,12 +19,18 @@ logger = structlog.get_logger(__name__)
 
 
 _MODEL_MAP = {
-    "gemini-flash": "gemini-2.0-flash",
+    "gemini-flash": "gemini-2.5-flash",
     "gemini-2.0-flash": "gemini-2.0-flash",
     "gemini-2.5-flash": "gemini-2.5-flash",
     "gemini-pro": "gemini-2.5-pro",
     "gemini-2.5-pro": "gemini-2.5-pro",
 }
+
+# Tokens reserved for Gemini "thinking" on 2.5+ models. Added on top of the
+# client's max_tokens so thinking never eats into the answer — the client's
+# max_tokens keeps bounding the visible answer. Works for Flash and Pro alike
+# (a budget, unlike disabling, which Pro rejects).
+_THINKING_BUDGET = 2048
 
 
 class GeminiProvider:
@@ -56,10 +62,21 @@ class GeminiProvider:
         config_kwargs: dict = {}
         if system_text:
             config_kwargs["system_instruction"] = system_text
-        if request.max_tokens is not None:
-            config_kwargs["max_output_tokens"] = request.max_tokens
         if request.temperature is not None:
             config_kwargs["temperature"] = request.temperature
+
+        # Gemini 2.5+ "thinks" before answering, and thinking tokens are drawn
+        # from max_output_tokens. Give thinking its own budget and add it on top
+        # of the requested answer budget so the answer keeps its full max_tokens.
+        thinks = _supports_thinking(api_model)
+        if thinks:
+            config_kwargs["thinking_config"] = gtypes.ThinkingConfig(
+                thinking_budget=_THINKING_BUDGET
+            )
+        if request.max_tokens is not None:
+            config_kwargs["max_output_tokens"] = (
+                request.max_tokens + _THINKING_BUDGET if thinks else request.max_tokens
+            )
 
         try:
             response = await self._client.aio.models.generate_content(
@@ -106,3 +123,8 @@ def _translate_finish_reason(reason: object) -> str:
     if name in ("SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII"):
         return "content_filter"
     return "stop"
+
+
+def _supports_thinking(model: str) -> bool:
+    """Gemini 2.5+ models support a configurable thinking budget; 2.0/1.5 do not."""
+    return "2.5" in model

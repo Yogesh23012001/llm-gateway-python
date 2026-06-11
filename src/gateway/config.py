@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Resolve .env relative to the project root, not the process's cwd, so the app
+# loads the same credentials no matter what directory uvicorn is launched from.
+# src/gateway/config.py -> parents[2] is the project root.
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE),
         env_file_encoding="utf-8",
         extra="ignore",
     )
