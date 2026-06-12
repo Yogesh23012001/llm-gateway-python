@@ -1,59 +1,71 @@
-"""Provider abstraction: the LLMProvider protocol and the normalized types
-that flow between the router and every provider adapter.
+"""The LLMProvider protocol and shared provider types.
 
-Keeping an internal, provider-neutral request/response (instead of passing the
-OpenAI wire models straight through) means a new provider only has to map to
-these types, and the cost/usage accounting has one shape to reason about.
+A provider's only job: take normalized messages, call a vendor API, return
+a normalized CompletionResult. Providers know their vendor's shape. They do
+NOT know the OpenAI envelope — that translation happens in the API layer.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from dataclasses import dataclass
+from typing import Literal, Protocol, runtime_checkable
 
 
-@dataclass(slots=True)
-class Message:
-    role: str
+# ============================================================
+# Normalized types — the gateway's internal vocabulary
+# ============================================================
+
+
+@dataclass(frozen=True)
+class ProviderMessage:
+    """A message in the gateway's normalized form (provider-agnostic)."""
+
+    role: Literal["system", "user", "assistant"]
     content: str
 
 
-@dataclass(slots=True)
-class CompletionRequest:
-    model: str
-    messages: list[Message]
-    temperature: float | None = None
-    max_tokens: int | None = None
-    stop: list[str] | None = None
-    # Provider-specific passthrough knobs that don't fit the common shape.
-    extra: dict[str, Any] = field(default_factory=dict)
+@dataclass(frozen=True)
+class CompletionResult:
+    """What every provider returns. Primitives only — no OpenAI envelope.
 
+    The API layer wraps this into a ChatCompletionResponse via from_completion.
+    """
 
-@dataclass(slots=True)
-class Usage:
+    text: str
     prompt_tokens: int
     completion_tokens: int
-
-    @property
-    def total_tokens(self) -> int:
-        return self.prompt_tokens + self.completion_tokens
-
-
-@dataclass(slots=True)
-class CompletionResponse:
+    finish_reason: Literal["stop", "length", "content_filter"]
+    # Which provider produced this ("anthropic", "gemini") — set by the provider,
+    # so callers don't need a model->provider reverse lookup.
     provider: str
+    # The provider's own model id, for logging/verification
     model: str
-    content: str
-    usage: Usage
-    finish_reason: str = "stop"
+
+
+@dataclass(frozen=True)
+class CompletionRequest:
+    """What every provider receives. Normalized, provider-agnostic."""
+
+    messages: list[ProviderMessage]
+    model: str
+    max_tokens: int | None
+    temperature: float | None
+
+
+# ============================================================
+# The protocol
+# ============================================================
 
 
 @runtime_checkable
 class LLMProvider(Protocol):
-    """Implemented by each provider adapter (Anthropic, Gemini, ...)."""
+    """Every provider implements this. One method that matters."""
 
-    name: str
+    name: str  # "anthropic", "gemini" — for logging and routing
 
-    async def complete(self, request: CompletionRequest) -> CompletionResponse:
-        """Send a completion request upstream and return a normalized response."""
+    async def complete(self, request: CompletionRequest) -> CompletionResult:
+        """Call the vendor API and return a normalized result.
+
+        Raises a ProviderError subclass on failure (never a raw vendor exception).
+        """
         ...

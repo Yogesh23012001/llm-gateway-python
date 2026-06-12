@@ -1,0 +1,29 @@
+# Local virtualenv and caches — never ship these (huge, platform-specific)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# VCS / editor / OS
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+
+# Secrets — must not enter the build context
+.env
+.env.*
+!.env.example
+
+# Not needed in the runtime image
+tests/
+docker-compose.yaml
+Dockerfile
+.dockerignore
+
+# Docs (the Dockerfile copies README.md explicitly, so keep it)
+*.md
+!README.md
