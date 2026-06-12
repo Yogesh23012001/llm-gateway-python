@@ -2,6 +2,7 @@
 shape, delegates to the router."""
 
 from __future__ import annotations
+from gateway.router.circuit_breaker import CircuitOpenError
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request
@@ -70,6 +71,13 @@ async def chat_completions(
         )
         status = 503 if exc.retryable else 502
         raise HTTPException(status_code=status, detail={"error": "provider_error", "provider": exc.provider}) from exc
+    except CircuitOpenError as exc:
+        logger.warning("completion_rejected_circuit_open", provider=exc.provider, request_id=request_id)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "provider_unavailable", "provider": exc.provider, "reason": "circuit_open"},
+            headers={"Retry-After": "30"},
+        ) from exc
 
     latency_ms = (time.perf_counter() - start) * 1000
     cost = calculate_cost_usd(
