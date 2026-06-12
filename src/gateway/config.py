@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = Field(
-        default="postgresql+asyncpg://gateway:gateway@localhost:5433/gateway"
+        default="postgresql+asyncpg://gateway:gateway@localhost:5435/gateway"
     )
 
     # Service

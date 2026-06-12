@@ -111,6 +111,7 @@ class GeminiProvider:
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             finish_reason=finish_reason,
+            provider=self.name,
             model=api_model,
         )
 

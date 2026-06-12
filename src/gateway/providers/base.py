@@ -35,6 +35,9 @@ class CompletionResult:
     prompt_tokens: int
     completion_tokens: int
     finish_reason: Literal["stop", "length", "content_filter"]
+    # Which provider produced this ("anthropic", "gemini") — set by the provider,
+    # so callers don't need a model->provider reverse lookup.
+    provider: str
     # The provider's own model id, for logging/verification
     model: str
 
